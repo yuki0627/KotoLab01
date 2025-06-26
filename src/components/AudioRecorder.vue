@@ -3,39 +3,72 @@
     <div class="recorder-section">
       <h3>録音コントロール</h3>
       
-      <!-- 録音ボタン -->
-      <div class="controls">
-        <el-button 
-          type="primary" 
-          size="large"
-          :disabled="isRecording"
-          @click="startRecording"
-        >
-          録音開始
-        </el-button>
+      <!-- タブ -->
+      <el-tabs v-model="activeTab" class="recording-tabs">
+        <!-- 手動録音タブ -->
+        <el-tab-pane label="手動録音" name="manual">
+          <div class="manual-controls">
+            <div class="controls">
+              <el-button 
+                type="primary" 
+                size="large"
+                :disabled="isRecording || autoRecordActive"
+                @click="startManualRecording"
+              >
+                録音開始
+              </el-button>
+              
+              <el-button 
+                type="danger" 
+                size="large"
+                :disabled="!isRecording"
+                @click="stopManualRecording"
+              >
+                録音停止
+              </el-button>
+            </div>
+            
+            <!-- 手動録音状態 -->
+            <div class="recording-status">
+              <p>状態: {{ manualRecordingStatus }}</p>
+              <p v-if="isRecording">録音時間: {{ recordingTime }}秒</p>
+            </div>
+          </div>
+        </el-tab-pane>
         
-        <el-button 
-          type="danger" 
-          size="large"
-          @click="stopRecording"
-        >
-          録音停止
-        </el-button>
-        
-        <el-button 
-          type="info" 
-          size="large"
-          @click="toggleAutoRecord"
-        >
-          自動録音: {{ autoRecord ? 'ON' : 'OFF' }}
-        </el-button>
-      </div>
-      
-      <!-- 録音状態 -->
-      <div class="recording-status">
-        <p>録音状態: {{ recordingStatus }}</p>
-        <p v-if="isRecording">録音時間: {{ recordingTime }}秒</p>
-      </div>
+        <!-- 自動録音タブ -->
+        <el-tab-pane label="自動録音" name="auto">
+          <div class="auto-controls">
+            <div class="controls">
+              <el-button 
+                type="success" 
+                size="large"
+                :disabled="autoRecordActive || isRecording"
+                @click="startAutoRecord"
+              >
+                自動録音開始
+              </el-button>
+              
+              <el-button 
+                type="warning" 
+                size="large"
+                :disabled="!autoRecordActive"
+                @click="stopAutoRecord"
+              >
+                自動録音停止
+              </el-button>
+            </div>
+            
+            <!-- 自動録音状態 -->
+            <div class="recording-status">
+              <p>状態: {{ autoRecordingStatus }}</p>
+              <p v-if="autoRecordActive">
+                {{ autoRecordCurrentlyRecording ? '音声録音中' : '音声待機中' }}
+              </p>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
       
       <!-- 録音履歴 -->
       <div class="recording-history">
@@ -61,12 +94,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAudioDevices } from '../composables/useAudioDevices'
 
 const isRecording = ref(false)
 const autoRecord = ref(false)
+const autoRecordActive = ref(false)
+const autoRecordCurrentlyRecording = ref(false)
+const activeTab = ref('manual')
 
 // emitの定義
 const emit = defineEmits<{
@@ -84,12 +120,26 @@ let mediaRecorder: MediaRecorder | null = null
 let websocket: WebSocket | null = null
 let recordingTimer: ReturnType<typeof setInterval> | null = null
 
+// 状態表示用の計算プロパティ
+const manualRecordingStatus = computed(() => {
+  if (isRecording.value) return '録音中'
+  if (autoRecordActive.value) return '自動録音が有効のため無効'
+  return '待機中'
+})
+
+const autoRecordingStatus = computed(() => {
+  if (!autoRecordActive.value) return '停止中'
+  if (autoRecordCurrentlyRecording.value) return '音声録音中'
+  return '音声待機中'
+})
+
 onMounted(() => {
   loadRecordings()
 })
 
 
-async function startRecording() {
+// 手動録音関数
+async function startManualRecording() {
   try {
     // 選択されたデバイスで録音
     const constraints: MediaStreamConstraints = {
@@ -136,7 +186,7 @@ async function startRecording() {
   }
 }
 
-function stopRecording() {
+function stopManualRecording() {
   if (mediaRecorder) {
     mediaRecorder.stop()
     isRecording.value = false
@@ -231,6 +281,30 @@ async function deleteRecording(filename: string) {
   }
 }
 
+// 自動録音関数
+function startAutoRecord() {
+  autoRecordActive.value = true
+  autoRecord.value = true
+  emit('auto-record-changed', true)
+  ElMessage.success('自動録音を開始しました')
+  // TODO: VAD連動の自動録音ロジックを実装
+}
+
+function stopAutoRecord() {
+  autoRecordActive.value = false
+  autoRecord.value = false
+  autoRecordCurrentlyRecording.value = false
+  emit('auto-record-changed', false)
+  
+  // もし自動録音中だった場合は停止
+  if (isRecording.value) {
+    stopManualRecording()
+  }
+  
+  ElMessage.info('自動録音を停止しました')
+}
+
+// 旧関数（後で削除予定）
 function toggleAutoRecord() {
   autoRecord.value = !autoRecord.value
   emit('auto-record-changed', autoRecord.value)
