@@ -108,10 +108,16 @@ const noiseLevel = ref(-50)
 const waveformCanvas = ref<HTMLCanvasElement>()
 const vadThreshold = ref(-35)  // VAD閾値
 
-// 録音状態管理（外部から受け取る予定）
-const isRecording = ref(false)
-const autoRecordEnabled = ref(false)
-const isManualRecording = ref(false)
+// Props定義
+interface Props {
+  isRecording?: boolean
+  autoRecordEnabled?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  isRecording: false,
+  autoRecordEnabled: false
+})
 
 // スライダー用マーク
 const vadThresholdMarks = {
@@ -128,16 +134,16 @@ const thresholdPosition = computed(() => {
 
 // 録音状態表示
 const recordingStatusClass = computed(() => {
-  if (isRecording.value) return 'recording'
-  if (autoRecordEnabled.value && isSpeaking.value) return 'auto-recording'
-  if (autoRecordEnabled.value) return 'waiting'
+  if (props.isRecording) return 'recording'
+  if (props.autoRecordEnabled && isSpeaking.value) return 'auto-recording'
+  if (props.autoRecordEnabled) return 'waiting'
   return 'stopped'
 })
 
 const recordingStatusText = computed(() => {
-  if (isRecording.value) return 'REC'
-  if (autoRecordEnabled.value && isSpeaking.value) return '自動録音中'
-  if (autoRecordEnabled.value) return '自動録音待機'
+  if (props.isRecording) return 'REC'
+  if (props.autoRecordEnabled && isSpeaking.value) return '自動録音中'
+  if (props.autoRecordEnabled) return '自動録音待機'
   return '録音停止'
 })
 

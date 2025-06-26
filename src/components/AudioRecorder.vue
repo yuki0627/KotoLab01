@@ -67,6 +67,12 @@ import { useAudioDevices } from '../composables/useAudioDevices'
 
 const isRecording = ref(false)
 const autoRecord = ref(false)
+
+// emitの定義
+const emit = defineEmits<{
+  'recording-changed': [boolean]
+  'auto-record-changed': [boolean]
+}>()
 const recordingStatus = ref('待機中')
 const recordingTime = ref(0)
 const recordings = ref<any[]>([])
@@ -113,6 +119,7 @@ async function startRecording() {
     
     mediaRecorder.start()
     isRecording.value = true
+    emit('recording-changed', true)
     recordingStatus.value = '録音中'
     recordingTime.value = 0
     
@@ -133,6 +140,7 @@ function stopRecording() {
   if (mediaRecorder) {
     mediaRecorder.stop()
     isRecording.value = false
+    emit('recording-changed', false)
     recordingStatus.value = '待機中'
     
     if (recordingTimer) {
@@ -225,6 +233,7 @@ async function deleteRecording(filename: string) {
 
 function toggleAutoRecord() {
   autoRecord.value = !autoRecord.value
+  emit('auto-record-changed', autoRecord.value)
   ElMessage.info(`自動録音を${autoRecord.value ? '有効' : '無効'}にしました`)
 }
 </script>
