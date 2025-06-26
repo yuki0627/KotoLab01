@@ -5,6 +5,7 @@ interface AudioMonitorOptions {
   onVadUpdate: (isSpeaking: boolean) => void
   onWaveformUpdate: (data: Float32Array) => void
   onNoiseLevel: (level: number) => void
+  deviceId?: string
 }
 
 export function useAudioMonitor(options: AudioMonitorOptions) {
@@ -17,14 +18,17 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   
   async function startMonitoring() {
     try {
-      // マイクアクセス
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      // マイクアクセス（デバイス指定対応）
+      const constraints: MediaStreamConstraints = {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: false
-        } 
-      })
+          autoGainControl: false,
+          ...(options.deviceId && { deviceId: { exact: options.deviceId } })
+        }
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       
       // Audio Context設定
       audioContext = new AudioContext()
@@ -82,7 +86,16 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   function stopMonitoring() {
     isMonitoring.value = false
     if (animationId) cancelAnimationFrame(animationId)
+    if (microphone) {
+      microphone.mediaStream.getTracks().forEach(track => track.stop())
+      microphone.disconnect()
+    }
     if (audioContext) audioContext.close()
+  }
+  
+  function restartMonitoring() {
+    stopMonitoring()
+    setTimeout(() => startMonitoring(), 100)
   }
   
   function calculateNoiseFloor(data: Float32Array): number {
@@ -97,6 +110,7 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   return {
     isMonitoring,
     startMonitoring,
-    stopMonitoring
+    stopMonitoring,
+    restartMonitoring
   }
 }

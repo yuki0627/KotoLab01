@@ -53,14 +53,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useAudioDevices } from '../composables/useAudioDevices'
 
 const isRecording = ref(false)
 const autoRecord = ref(false)
 const recordingStatus = ref('待機中')
 const recordingTime = ref(0)
 const recordings = ref<any[]>([])
+
+// オーディオデバイス管理
+const { selectedDeviceId } = useAudioDevices()
 
 let mediaRecorder: MediaRecorder | null = null
 let websocket: WebSocket | null = null
@@ -80,14 +84,18 @@ async function toggleRecording() {
 
 async function startRecording() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ 
+    // 選択されたデバイスで録音
+    const constraints: MediaStreamConstraints = {
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: false,
-        sampleRate: 16000
-      } 
-    })
+        sampleRate: 16000,
+        ...(selectedDeviceId.value && { deviceId: { exact: selectedDeviceId.value } })
+      }
+    }
+    
+    const stream = await navigator.mediaDevices.getUserMedia(constraints)
     
     mediaRecorder = new MediaRecorder(stream)
     const chunks: Blob[] = []

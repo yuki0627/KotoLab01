@@ -3,6 +3,31 @@
     <div class="monitor-section">
       <h3>リアルタイムモニター</h3>
       
+      <!-- マイク選択 -->
+      <div class="device-selection">
+        <label>マイク選択:</label>
+        <el-select 
+          v-model="selectedDeviceId" 
+          placeholder="マイクを選択"
+          @change="onDeviceChange"
+          :loading="isDeviceLoading"
+        >
+          <el-option
+            v-for="device in audioDevices"
+            :key="device.deviceId"
+            :label="device.label"
+            :value="device.deviceId"
+          />
+        </el-select>
+        <el-button 
+          size="small" 
+          @click="refreshDevices"
+          :loading="isDeviceLoading"
+        >
+          マイク一覧更新
+        </el-button>
+      </div>
+      
       <!-- 音量メーター -->
       <div class="volume-meter">
         <label>音量レベル: {{ volumeDb }} dB</label>
@@ -31,8 +56,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useAudioMonitor } from '../composables/useAudioMonitor'
+import { useAudioDevices } from '../composables/useAudioDevices'
 
 const volumeDb = ref(-60)
 const volumePercentage = ref(0)
@@ -40,13 +66,22 @@ const isSpeaking = ref(false)
 const noiseLevel = ref(-50)
 const waveformCanvas = ref<HTMLCanvasElement>()
 
+// オーディオデバイス管理
+const { 
+  audioDevices, 
+  selectedDeviceId, 
+  isLoading: isDeviceLoading,
+  getAudioDevices,
+  selectDevice 
+} = useAudioDevices()
+
 const volumeColor = computed(() => {
   if (volumeDb.value > -10) return '#f56c6c' // 赤（音量大）
   if (volumeDb.value > -30) return '#e6a23c' // オレンジ
   return '#67c23a' // 緑（適正）
 })
 
-const { startMonitoring, stopMonitoring } = useAudioMonitor({
+const { startMonitoring, stopMonitoring, restartMonitoring } = useAudioMonitor({
   onVolumeUpdate: (db: number, percentage: number) => {
     volumeDb.value = db
     volumePercentage.value = percentage
@@ -59,6 +94,14 @@ const { startMonitoring, stopMonitoring } = useAudioMonitor({
   },
   onNoiseLevel: (level: number) => {
     noiseLevel.value = level
+  },
+  deviceId: selectedDeviceId.value
+})
+
+// デバイス変更を監視
+watch(selectedDeviceId, (newDeviceId) => {
+  if (newDeviceId) {
+    restartMonitoring()
   }
 })
 
@@ -69,6 +112,16 @@ onMounted(() => {
 onUnmounted(() => {
   stopMonitoring()
 })
+
+// デバイス選択変更時
+function onDeviceChange(deviceId: string) {
+  selectDevice(deviceId)
+}
+
+// デバイス一覧更新
+function refreshDevices() {
+  getAudioDevices()
+}
 
 // 波形描画
 function drawWaveform(data: Float32Array) {
@@ -112,6 +165,18 @@ function drawWaveform(data: Float32Array) {
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 20px;
+}
+
+.device-selection {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.device-selection label {
+  font-weight: bold;
+  min-width: 80px;
 }
 
 .volume-meter {
