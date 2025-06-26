@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.rye/
+__pycache__/
+
+# Environment
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+
+# Recordings
+recordings/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
