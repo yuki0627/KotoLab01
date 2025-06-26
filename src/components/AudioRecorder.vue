@@ -8,10 +8,18 @@
         <el-button 
           type="primary" 
           size="large"
-          :loading="isRecording"
-          @click="toggleRecording"
+          :disabled="isRecording"
+          @click="startRecording"
         >
-          {{ isRecording ? '録音停止' : '録音開始' }}
+          録音開始
+        </el-button>
+        
+        <el-button 
+          type="danger" 
+          size="large"
+          @click="stopRecording"
+        >
+          録音停止
         </el-button>
         
         <el-button 
@@ -53,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAudioDevices } from '../composables/useAudioDevices'
 
@@ -68,19 +76,12 @@ const { selectedDeviceId } = useAudioDevices()
 
 let mediaRecorder: MediaRecorder | null = null
 let websocket: WebSocket | null = null
-let recordingTimer: number | null = null
+let recordingTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   loadRecordings()
 })
 
-async function toggleRecording() {
-  if (isRecording.value) {
-    stopRecording()
-  } else {
-    await startRecording()
-  }
-}
 
 async function startRecording() {
   try {
@@ -129,7 +130,7 @@ async function startRecording() {
 }
 
 function stopRecording() {
-  if (mediaRecorder && isRecording.value) {
+  if (mediaRecorder) {
     mediaRecorder.stop()
     isRecording.value = false
     recordingStatus.value = '待機中'
@@ -190,7 +191,7 @@ function playRecording(filename: string) {
   audio.play()
 }
 
-async function deleteRecording(filename: string) {
+async function deleteRecording(_filename: string) {
   // サーバー側で削除APIを実装する必要があります
   ElMessage.info('削除機能は未実装です')
 }
