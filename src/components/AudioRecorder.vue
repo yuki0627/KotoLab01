@@ -62,7 +62,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAudioDevices } from '../composables/useAudioDevices'
 
 const isRecording = ref(false)
@@ -191,9 +191,36 @@ function playRecording(filename: string) {
   audio.play()
 }
 
-async function deleteRecording(_filename: string) {
-  // サーバー側で削除APIを実装する必要があります
-  ElMessage.info('削除機能は未実装です')
+async function deleteRecording(filename: string) {
+  try {
+    await ElMessageBox.confirm(
+      `ファイル "${filename}" を削除してもよろしいですか？`,
+      '確認',
+      {
+        confirmButtonText: '削除',
+        cancelButtonText: 'キャンセル',
+        type: 'warning',
+      }
+    )
+    
+    const response = await fetch(`http://127.0.0.1:8000/recordings/${filename}`, {
+      method: 'DELETE'
+    })
+    
+    const data = await response.json()
+    
+    if (response.ok) {
+      ElMessage.success(data.message || '削除しました')
+      loadRecordings()
+    } else {
+      ElMessage.error(data.error || '削除に失敗しました')
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('削除に失敗しました')
+      console.error('削除エラー:', error)
+    }
+  }
 }
 
 function toggleAutoRecord() {

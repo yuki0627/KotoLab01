@@ -77,6 +77,17 @@ async def get_recording(filename: str):
         return FileResponse(filepath)
     return {"error": "File not found"}
 
+@app.delete("/recordings/{filename}")
+async def delete_recording(filename: str):
+    filepath = os.path.join(AUDIO_SAVE_PATH, filename)
+    if os.path.exists(filepath):
+        try:
+            os.remove(filepath)
+            return {"message": "File deleted successfully", "filename": filename}
+        except Exception as e:
+            return {"error": f"Failed to delete file: {str(e)}"}
+    return {"error": "File not found"}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=API_HOST, port=API_PORT)
