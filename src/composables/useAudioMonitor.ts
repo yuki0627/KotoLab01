@@ -6,6 +6,7 @@ interface AudioMonitorOptions {
   onWaveformUpdate: (data: Float32Array) => void
   onNoiseLevel: (level: number) => void
   deviceId?: string
+  vadThreshold?: number  // VAD閾値（dB）
 }
 
 export function useAudioMonitor(options: AudioMonitorOptions) {
@@ -15,6 +16,7 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   let animationId: number | null = null
   
   const isMonitoring = ref(false)
+  const vadThreshold = ref(options.vadThreshold ?? -35)  // デフォルト -35 dB
   
   async function startMonitoring() {
     try {
@@ -61,7 +63,7 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
         options.onVolumeUpdate(Math.round(db), Math.round(percentage))
         
         // 簡易VAD（エネルギーベース）
-        const isSpeaking = db > -35 // 閾値は調整可能
+        const isSpeaking = db > vadThreshold.value
         options.onVadUpdate(isSpeaking)
         
         // 波形データ
@@ -107,10 +109,16 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
     stopMonitoring()
   })
   
+  function setVadThreshold(threshold: number) {
+    vadThreshold.value = threshold
+  }
+
   return {
     isMonitoring,
+    vadThreshold,
     startMonitoring,
     stopMonitoring,
-    restartMonitoring
+    restartMonitoring,
+    setVadThreshold
   }
 }
