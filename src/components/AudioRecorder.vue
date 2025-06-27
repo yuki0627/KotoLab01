@@ -87,26 +87,6 @@
           </div>
         </el-tab-pane>
       </el-tabs>
-      
-      <!-- 録音履歴 -->
-      <div class="recording-history">
-        <h4>録音履歴</h4>
-        <el-table :data="recordings" style="width: 100%">
-          <el-table-column prop="name" label="ファイル名" />
-          <el-table-column prop="size" label="サイズ (KB)" />
-          <el-table-column prop="created" label="作成日時" />
-          <el-table-column label="操作">
-            <template #default="scope">
-              <el-button size="small" @click="playRecording(scope.row.name)">
-                再生
-              </el-button>
-              <el-button size="small" type="danger" @click="deleteRecording(scope.row.name)">
-                削除
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
     </div>
   </div>
 </template>
@@ -128,6 +108,7 @@ const emit = defineEmits<{
   'recording-changed': [boolean]
   'auto-record-changed': [boolean]
   'silence-duration-changed': [number]
+  'recording-completed': []
 }>()
 
 // スライダー用マーク
@@ -139,7 +120,6 @@ const silenceDurationMarks = {
 }
 const recordingStatus = ref('待機中')
 const recordingTime = ref(0)
-const recordings = ref<any[]>([])
 
 // オーディオデバイス管理
 const { selectedDeviceId } = useAudioDevices()
@@ -159,10 +139,6 @@ const autoRecordingStatus = computed(() => {
   if (!autoRecordActive.value) return '停止中'
   if (autoRecordCurrentlyRecording.value) return '音声録音中'
   return '音声待機中'
-})
-
-onMounted(() => {
-  loadRecordings()
 })
 
 
@@ -248,7 +224,7 @@ async function sendToServer(blob: Blob) {
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data)
       ElMessage.success(`録音ファイルを保存しました: ${data.filename}`)
-      loadRecordings()
+      emit('recording-completed')
     }
     
     websocket.onerror = () => {
@@ -261,56 +237,6 @@ async function sendToServer(blob: Blob) {
   }
 }
 
-async function loadRecordings() {
-  try {
-    const response = await fetch('http://127.0.0.1:8000/recordings')
-    const data = await response.json()
-    recordings.value = data.recordings.map((r: any) => ({
-      ...r,
-      size: Math.round(r.size / 1024),
-      created: new Date(r.created * 1000).toLocaleString()
-    }))
-  } catch (error) {
-    console.error('録音履歴の取得に失敗:', error)
-  }
-}
-
-function playRecording(filename: string) {
-  const audio = new Audio(`http://127.0.0.1:8000/recordings/${filename}`)
-  audio.play()
-}
-
-async function deleteRecording(filename: string) {
-  try {
-    await ElMessageBox.confirm(
-      `ファイル "${filename}" を削除してもよろしいですか？`,
-      '確認',
-      {
-        confirmButtonText: '削除',
-        cancelButtonText: 'キャンセル',
-        type: 'warning',
-      }
-    )
-    
-    const response = await fetch(`http://127.0.0.1:8000/recordings/${filename}`, {
-      method: 'DELETE'
-    })
-    
-    const data = await response.json()
-    
-    if (response.ok) {
-      ElMessage.success(data.message || '削除しました')
-      loadRecordings()
-    } else {
-      ElMessage.error(data.error || '削除に失敗しました')
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('削除に失敗しました')
-      console.error('削除エラー:', error)
-    }
-  }
-}
 
 // 自動録音関数
 function startAutoRecord() {
@@ -383,14 +309,6 @@ defineExpose({
   padding: 10px;
   background: #f9f9f9;
   border-radius: 4px;
-}
-
-.recording-history {
-  margin-top: 20px;
-}
-
-.recording-history h4 {
-  margin-bottom: 10px;
 }
 
 .auto-record-settings {

@@ -11,7 +11,9 @@
       @recording-changed="isRecording = $event"
       @auto-record-changed="autoRecordEnabled = $event"
       @silence-duration-changed="silenceDuration = $event"
+      @recording-completed="handleRecordingCompleted"
     />
+    <RecordingHistory ref="recordingHistoryRef" />
   </div>
 </template>
 
@@ -19,12 +21,14 @@
 import { ref } from 'vue'
 import AudioMonitor from './components/AudioMonitor.vue'
 import AudioRecorder from './components/AudioRecorder.vue'
+import RecordingHistory from './components/RecordingHistory.vue'
 
 const isRecording = ref(false)
 const autoRecordEnabled = ref(false)
 const isSpeaking = ref(false)
 const silenceDuration = ref(1) // 秒
 const audioRecorderRef = ref()
+const recordingHistoryRef = ref()
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 
 // VAD状態変更時の処理
@@ -62,6 +66,11 @@ function handleVadChange(speaking: boolean) {
       silenceTimer = null
     }
   }
+}
+
+// 録音完了時の処理
+function handleRecordingCompleted() {
+  recordingHistoryRef.value?.onRecordingCompleted()
 }
 </script>
 
