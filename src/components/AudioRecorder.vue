@@ -66,6 +66,24 @@
                 {{ autoRecordCurrentlyRecording ? '音声録音中' : '音声待機中' }}
               </p>
             </div>
+            
+            <!-- 自動録音設定 -->
+            <div class="auto-record-settings">
+              <div class="silence-duration-setting">
+                <label>録音停止までの無音時間: {{ silenceDuration }} 秒</label>
+                <el-slider
+                  v-model="silenceDuration"
+                  :min="0.5"
+                  :max="5"
+                  :step="0.5"
+                  :marks="silenceDurationMarks"
+                  @change="onSilenceDurationChange"
+                />
+                <div class="setting-hint">
+                  短いほど敏感に停止、長いほど余裕を持って録音継続
+                </div>
+              </div>
+            </div>
           </div>
         </el-tab-pane>
       </el-tabs>
@@ -103,12 +121,22 @@ const autoRecord = ref(false)
 const autoRecordActive = ref(false)
 const autoRecordCurrentlyRecording = ref(false)
 const activeTab = ref('manual')
+const silenceDuration = ref(1)  // 無音時間（秒）
 
 // emitの定義
 const emit = defineEmits<{
   'recording-changed': [boolean]
   'auto-record-changed': [boolean]
+  'silence-duration-changed': [number]
 }>()
+
+// スライダー用マーク
+const silenceDurationMarks = {
+  '0.5': '0.5s',
+  '1': '1s',
+  '2': '2s',
+  '5': '5s'
+}
 const recordingStatus = ref('待機中')
 const recordingTime = ref(0)
 const recordings = ref<any[]>([])
@@ -165,6 +193,9 @@ async function startManualRecording() {
       const blob = new Blob(chunks, { type: 'audio/wav' })
       await sendToServer(blob)
       stream.getTracks().forEach(track => track.stop())
+      
+      // MediaRecorderをリセット
+      mediaRecorder = null
     }
     
     mediaRecorder.start()
@@ -304,12 +335,33 @@ function stopAutoRecord() {
   ElMessage.info('自動録音を停止しました')
 }
 
-// 旧関数（後で削除予定）
-function toggleAutoRecord() {
-  autoRecord.value = !autoRecord.value
-  emit('auto-record-changed', autoRecord.value)
-  ElMessage.info(`自動録音を${autoRecord.value ? '有効' : '無効'}にしました`)
+// 自動録音の実際の録音開始/停止（外部から呼ばれる）
+async function startAutoRecording() {
+  if (!autoRecordActive.value || isRecording.value) return
+  
+  console.log('自動録音開始')
+  autoRecordCurrentlyRecording.value = true
+  await startManualRecording() // 実際の録音処理を流用
 }
+
+function stopAutoRecording() {
+  if (!autoRecordCurrentlyRecording.value) return
+  
+  console.log('自動録音停止')
+  autoRecordCurrentlyRecording.value = false
+  stopManualRecording() // 実際の停止処理を流用
+}
+
+// 無音時間変更時
+function onSilenceDurationChange(value: number) {
+  emit('silence-duration-changed', value)
+}
+
+// 外部からアクセス可能にする
+defineExpose({
+  startAutoRecording,
+  stopAutoRecording
+})
 </script>
 
 <style scoped>
@@ -339,5 +391,29 @@ function toggleAutoRecord() {
 
 .recording-history h4 {
   margin-bottom: 10px;
+}
+
+.auto-record-settings {
+  margin-top: 20px;
+}
+
+.silence-duration-setting {
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.silence-duration-setting label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 10px;
+}
+
+.setting-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
 }
 </style>

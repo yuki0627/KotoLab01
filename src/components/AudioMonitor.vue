@@ -119,12 +119,18 @@ const props = withDefaults(defineProps<Props>(), {
   autoRecordEnabled: false
 })
 
+// Emit定義
+const emit = defineEmits<{
+  'vad-changed': [boolean]
+}>()
+
 // スライダー用マーク
 const vadThresholdMarks = {
   '-60': '-60',
   '-35': '推奨',
   '-10': '-10'
 }
+
 
 // 閾値の位置計算（0-100%）
 const thresholdPosition = computed(() => {
@@ -169,7 +175,13 @@ const { startMonitoring, stopMonitoring, restartMonitoring, setVadThreshold } = 
     volumePercentage.value = percentage
   },
   onVadUpdate: (speaking: boolean) => {
+    const wasChanged = isSpeaking.value !== speaking
     isSpeaking.value = speaking
+    
+    // 音声検出状態が変わったらemit
+    if (wasChanged) {
+      emit('vad-changed', speaking)
+    }
   },
   onWaveformUpdate: (data: Float32Array) => {
     drawWaveform(data)
