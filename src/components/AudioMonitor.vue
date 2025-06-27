@@ -178,7 +178,6 @@ const { startMonitoring, stopMonitoring, restartMonitoring, setVadThreshold } = 
     const wasChanged = isSpeaking.value !== speaking
     isSpeaking.value = speaking
     
-    // 音声検出状態が変わったらemit
     if (wasChanged) {
       emit('vad-changed', speaking)
     }

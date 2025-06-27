@@ -127,6 +127,7 @@ const { selectedDeviceId } = useAudioDevices()
 let mediaRecorder: MediaRecorder | null = null
 let websocket: WebSocket | null = null
 let recordingTimer: ReturnType<typeof setInterval> | null = null
+let currentStream: MediaStream | null = null
 
 // 状態表示用の計算プロパティ
 const manualRecordingStatus = computed(() => {
@@ -145,6 +146,9 @@ const autoRecordingStatus = computed(() => {
 // 手動録音関数
 async function startManualRecording() {
   try {
+    // 既存のリソースをクリーンアップ
+    await cleanupRecording()
+    
     // 選択されたデバイスで録音
     const constraints: MediaStreamConstraints = {
       audio: {
@@ -156,25 +160,32 @@ async function startManualRecording() {
       }
     }
     
-    const stream = await navigator.mediaDevices.getUserMedia(constraints)
-    
-    mediaRecorder = new MediaRecorder(stream)
+    currentStream = await navigator.mediaDevices.getUserMedia(constraints)
+    mediaRecorder = new MediaRecorder(currentStream)
     const chunks: Blob[] = []
     
     mediaRecorder.ondataavailable = (event) => {
-      chunks.push(event.data)
+      if (event.data.size > 0) {
+        chunks.push(event.data)
+      }
     }
     
     mediaRecorder.onstop = async () => {
-      const blob = new Blob(chunks, { type: 'audio/wav' })
-      await sendToServer(blob)
-      stream.getTracks().forEach(track => track.stop())
+      try {
+        if (chunks.length > 0 && chunks.some(chunk => chunk.size > 0)) {
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          await sendToServer(blob)
+        }
+      } catch (error) {
+        console.error('録音データ処理エラー:', error)
+      }
       
-      // MediaRecorderをリセット
-      mediaRecorder = null
+      // リソースをクリーンアップ
+      await cleanupRecording()
     }
     
-    mediaRecorder.start()
+    mediaRecorder.start(1000)
+    
     isRecording.value = true
     emit('recording-changed', true)
     recordingStatus.value = '録音中'
@@ -190,20 +201,42 @@ async function startManualRecording() {
   } catch (error) {
     ElMessage.error('録音の開始に失敗しました')
     console.error('録音エラー:', error)
+    await cleanupRecording()
   }
 }
 
-function stopManualRecording() {
-  if (mediaRecorder) {
+// リソースクリーンアップ関数
+async function cleanupRecording() {
+  // MediaRecorderを停止
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop()
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  
+  // ストリームを停止
+  if (currentStream) {
+    currentStream.getTracks().forEach(track => track.stop())
+    currentStream = null
+  }
+  
+  // タイマーをクリア
+  if (recordingTimer) {
+    clearInterval(recordingTimer)
+    recordingTimer = null
+  }
+  
+  // 変数をリセット
+  mediaRecorder = null
+}
+
+function stopManualRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop()
+    
+    // 状態を即座に更新
     isRecording.value = false
     emit('recording-changed', false)
     recordingStatus.value = '待機中'
-    
-    if (recordingTimer) {
-      clearInterval(recordingTimer)
-      recordingTimer = null
-    }
     
     ElMessage.success('録音を停止しました')
   }
@@ -213,7 +246,7 @@ async function sendToServer(blob: Blob) {
   try {
     const arrayBuffer = await blob.arrayBuffer()
     
-    if (!websocket) {
+    if (!websocket || websocket.readyState === WebSocket.CLOSED) {
       websocket = new WebSocket('ws://127.0.0.1:8000/ws/audio')
     }
     
@@ -229,6 +262,11 @@ async function sendToServer(blob: Blob) {
     
     websocket.onerror = () => {
       ElMessage.error('サーバーとの通信に失敗しました')
+    }
+    
+    // 既に接続済みの場合は即座に送信
+    if (websocket.readyState === WebSocket.OPEN) {
+      websocket.send(arrayBuffer)
     }
     
   } catch (error) {
@@ -265,17 +303,15 @@ function stopAutoRecord() {
 async function startAutoRecording() {
   if (!autoRecordActive.value || isRecording.value) return
   
-  console.log('自動録音開始')
   autoRecordCurrentlyRecording.value = true
-  await startManualRecording() // 実際の録音処理を流用
+  await startManualRecording()
 }
 
 function stopAutoRecording() {
   if (!autoRecordCurrentlyRecording.value) return
   
-  console.log('自動録音停止')
   autoRecordCurrentlyRecording.value = false
-  stopManualRecording() // 実際の停止処理を流用
+  stopManualRecording()
 }
 
 // 無音時間変更時

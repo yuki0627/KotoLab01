@@ -62,7 +62,7 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
         
         options.onVolumeUpdate(Math.round(db), Math.round(percentage))
         
-        // 簡易VAD（エネルギーベース）
+        // シンプルなVAD（エネルギーベース）
         const isSpeaking = db > vadThreshold.value
         options.onVadUpdate(isSpeaking)
         

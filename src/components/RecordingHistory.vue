@@ -17,24 +17,36 @@
       <!-- 録音ファイル一覧 -->
       <el-table :data="recordings" style="width: 100%">
         <el-table-column prop="name" label="ファイル名" />
-        <el-table-column prop="size" label="サイズ (KB)" />
+        <el-table-column prop="size" label="サイズ (KB)" width="100" />
         <el-table-column prop="created" label="作成日時" />
-        <el-table-column label="操作" width="150">
+        <el-table-column label="操作" width="180">
           <template #default="scope">
-            <el-button 
-              size="small" 
-              @click="playRecording(scope.row.name)"
-              :loading="playingFile === scope.row.name"
-            >
-              再生
-            </el-button>
-            <el-button 
-              size="small" 
-              type="danger" 
-              @click="deleteRecording(scope.row.name)"
-            >
-              削除
-            </el-button>
+            <div class="simple-controls">
+              <el-button 
+                v-if="playingFile !== scope.row.name"
+                size="small" 
+                type="primary"
+                @click="playRecording(scope.row.name)"
+              >
+                再生
+              </el-button>
+              <el-button 
+                v-else
+                size="small" 
+                type="warning"
+                @click="stopRecording()"
+              >
+                停止
+              </el-button>
+              
+              <el-button 
+                size="small" 
+                type="danger" 
+                @click="deleteRecording(scope.row.name)"
+              >
+                削除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -54,6 +66,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 const recordings = ref<any[]>([])
 const isLoading = ref(false)
 const playingFile = ref<string | null>(null)
+let currentAudio: HTMLAudioElement | null = null
 
 onMounted(() => {
   loadRecordings()
@@ -64,11 +77,14 @@ async function loadRecordings() {
     isLoading.value = true
     const response = await fetch('http://127.0.0.1:8000/recordings')
     const data = await response.json()
-    recordings.value = data.recordings.map((r: any) => ({
-      ...r,
-      size: Math.round(r.size / 1024),
-      created: new Date(r.created * 1000).toLocaleString()
-    }))
+    recordings.value = data.recordings
+      .map((r: any) => ({
+        ...r,
+        size: Math.round(r.size / 1024),
+        created: new Date(r.created * 1000).toLocaleString(),
+        createdTimestamp: r.created
+      }))
+      .sort((a: any, b: any) => b.createdTimestamp - a.createdTimestamp) // 新しい順にソート
   } catch (error) {
     console.error('録音履歴の取得に失敗:', error)
     ElMessage.error('録音履歴の取得に失敗しました')
@@ -79,21 +95,29 @@ async function loadRecordings() {
 
 async function playRecording(filename: string) {
   try {
-    playingFile.value = filename
-    const audio = new Audio(`http://127.0.0.1:8000/recordings/${filename}`)
-    
-    audio.onended = () => {
-      playingFile.value = null
+    // 既存の再生を停止
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio = null
     }
     
-    audio.onerror = () => {
-      playingFile.value = null
+    playingFile.value = filename
+    currentAudio = new Audio(`http://127.0.0.1:8000/recordings/${filename}`)
+    
+    // 再生終了時
+    currentAudio.onended = () => {
+      stopRecording()
+    }
+    
+    // エラー時
+    currentAudio.onerror = () => {
+      stopRecording()
       ElMessage.error('再生に失敗しました')
     }
     
-    await audio.play()
+    await currentAudio.play()
   } catch (error) {
-    playingFile.value = null
+    stopRecording()
     ElMessage.error('再生に失敗しました')
   }
 }
@@ -128,6 +152,15 @@ async function deleteRecording(filename: string) {
       console.error('削除エラー:', error)
     }
   }
+}
+
+// 再生停止
+function stopRecording() {
+  if (currentAudio) {
+    currentAudio.pause()
+    currentAudio = null
+  }
+  playingFile.value = null
 }
 
 // 外部から録音完了を通知される
@@ -165,5 +198,12 @@ defineExpose({
 
 .el-table {
   margin-top: 10px;
+}
+
+.simple-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
 }
 </style>

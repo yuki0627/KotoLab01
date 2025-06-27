@@ -31,36 +31,34 @@ const audioRecorderRef = ref()
 const recordingHistoryRef = ref()
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 
-// VAD状態変更時の処理
+// シンプルなVAD状態変更処理
 function handleVadChange(speaking: boolean) {
   isSpeaking.value = speaking
   
-  // 自動録音が有効な場合のみ処理
+  // 自動録音が有効でない場合は何もしない
   if (!autoRecordEnabled.value) return
   
   if (speaking && !isRecording.value) {
-    // 音声検出開始 → 録音開始
-    // 既存のタイマーをクリア
+    // 閾値を超えた → 録音開始
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
     }
     audioRecorderRef.value?.startAutoRecording()
   } else if (!speaking && isRecording.value) {
-    // 音声検出停止 → 設定された時間後に録音停止
+    // 閾値を下回った → 無音時間後に録音停止
     if (silenceTimer) {
       clearTimeout(silenceTimer)
     }
     
     silenceTimer = setTimeout(() => {
-      // タイマー実行時に再度チェック
       if (!isSpeaking.value && isRecording.value && autoRecordEnabled.value) {
         audioRecorderRef.value?.stopAutoRecording()
       }
       silenceTimer = null
     }, silenceDuration.value * 1000)
   } else if (speaking && isRecording.value) {
-    // 録音中に再び音声検出 → タイマーをクリア
+    // 録音中に再び音声検出 → 停止タイマーをキャンセル
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
@@ -72,6 +70,7 @@ function handleVadChange(speaking: boolean) {
 function handleRecordingCompleted() {
   recordingHistoryRef.value?.onRecordingCompleted()
 }
+
 </script>
 
 <style>
