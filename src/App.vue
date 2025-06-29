@@ -26,7 +26,7 @@ import RecordingHistory from './components/RecordingHistory.vue'
 const isRecording = ref(false)
 const autoRecordEnabled = ref(false)
 const isSpeaking = ref(false)
-const silenceDuration = ref(1) // 秒
+const silenceDuration = ref(5) // 秒 - デフォルト5秒
 const audioRecorderRef = ref()
 const recordingHistoryRef = ref()
 let silenceTimer: ReturnType<typeof setTimeout> | null = null

@@ -70,12 +70,12 @@
             <!-- 自動録音設定 -->
             <div class="auto-record-settings">
               <div class="silence-duration-setting">
-                <label>録音停止までの無音時間: {{ silenceDuration }} 秒</label>
+                <label>録音停止までの無音時間: {{ formatDuration(silenceDuration) }}</label>
                 <el-slider
                   v-model="silenceDuration"
-                  :min="0.5"
-                  :max="5"
-                  :step="0.5"
+                  :min="1"
+                  :max="300"
+                  :step="1"
                   :marks="silenceDurationMarks"
                   @change="onSilenceDurationChange"
                 />
@@ -101,7 +101,7 @@ const autoRecord = ref(false)
 const autoRecordActive = ref(false)
 const autoRecordCurrentlyRecording = ref(false)
 const activeTab = ref('manual')
-const silenceDuration = ref(1)  // 無音時間（秒）
+const silenceDuration = ref(5)  // 無音時間（秒）デフォルト5秒
 
 // emitの定義
 const emit = defineEmits<{
@@ -113,10 +113,11 @@ const emit = defineEmits<{
 
 // スライダー用マーク
 const silenceDurationMarks = {
-  '0.5': '0.5s',
-  '1': '1s',
-  '2': '2s',
-  '5': '5s'
+  '1': '1秒',
+  '30': '30秒',
+  '60': '1分',
+  '120': '2分',
+  '300': '5分'
 }
 const recordingStatus = ref('待機中')
 const recordingTime = ref(0)
@@ -317,6 +318,21 @@ function stopAutoRecording() {
 // 無音時間変更時
 function onSilenceDurationChange(value: number) {
   emit('silence-duration-changed', value)
+}
+
+// 時間フォーマット関数
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds}秒`
+  } else {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    if (remainingSeconds === 0) {
+      return `${minutes}分`
+    } else {
+      return `${minutes}分${remainingSeconds}秒`
+    }
+  }
 }
 
 // 外部からアクセス可能にする
