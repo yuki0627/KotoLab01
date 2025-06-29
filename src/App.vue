@@ -46,10 +46,13 @@ function handleVadChange(speaking: boolean) {
     }
     audioRecorderRef.value?.startAutoRecording()
   } else if (!speaking && isRecording.value) {
-    // 閾値を下回った → 無音時間後に録音停止
+    // 閾値を下回った → カウントダウン開始
     if (silenceTimer) {
       clearTimeout(silenceTimer)
     }
+    
+    // カウントダウン開始
+    audioRecorderRef.value?.startSilenceCountdown()
     
     silenceTimer = setTimeout(() => {
       if (!isSpeaking.value && isRecording.value && autoRecordEnabled.value) {
@@ -58,11 +61,12 @@ function handleVadChange(speaking: boolean) {
       silenceTimer = null
     }, silenceDuration.value * 1000)
   } else if (speaking && isRecording.value) {
-    // 録音中に再び音声検出 → 停止タイマーをキャンセル
+    // 録音中に再び音声検出 → 停止タイマーとカウントダウンをキャンセル
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
     }
+    audioRecorderRef.value?.stopSilenceCountdown()
   }
 }
 

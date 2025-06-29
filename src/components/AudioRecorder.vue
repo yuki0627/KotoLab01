@@ -65,6 +65,20 @@
               <p v-if="autoRecordActive">
                 {{ autoRecordCurrentlyRecording ? '音声録音中' : '音声待機中' }}
               </p>
+              
+              <!-- カウントダウン表示 -->
+              <div v-if="isCountingDown" class="countdown-display">
+                <div class="countdown-label">録音停止まで:</div>
+                <div class="countdown-timer">
+                  {{ formatCountdown(silenceCountdown) }}
+                </div>
+                <el-progress 
+                  :percentage="countdownPercentage" 
+                  :stroke-width="8"
+                  color="#f56c6c"
+                  :show-text="false"
+                />
+              </div>
             </div>
             
             <!-- 自動録音設定 -->
@@ -114,8 +128,13 @@ const isRecording = ref(false)
 const autoRecord = ref(false)
 const autoRecordActive = ref(false)
 const autoRecordCurrentlyRecording = ref(false)
-const activeTab = ref('manual')
+const activeTab = ref('auto') // デフォルトを自動録音に変更
 const silenceDuration = ref(5)  // 無音時間（秒）デフォルト5秒
+
+// カウントダウンタイマー関連
+const silenceCountdown = ref(0) // ミリ秒単位
+const isCountingDown = ref(false)
+let countdownInterval: ReturnType<typeof setInterval> | null = null
 
 // emitの定義
 const emit = defineEmits<{
@@ -165,6 +184,49 @@ const autoRecordingStatus = computed(() => {
   if (autoRecordCurrentlyRecording.value) return '音声録音中'
   return '音声待機中'
 })
+
+// カウントダウン関連の計算プロパティ
+const countdownPercentage = computed(() => {
+  if (silenceCountdown.value <= 0) return 0
+  const totalMs = silenceDuration.value * 1000
+  return Math.max(0, Math.min(100, (silenceCountdown.value / totalMs) * 100))
+})
+
+// カウントダウン表示フォーマット関数
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return '0.000秒'
+  const seconds = (ms / 1000).toFixed(3)
+  return `${seconds}秒`
+}
+
+// カウントダウンタイマー開始
+function startCountdown() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+  }
+  
+  silenceCountdown.value = silenceDuration.value * 1000 // ミリ秒に変換
+  isCountingDown.value = true
+  
+  countdownInterval = setInterval(() => {
+    silenceCountdown.value -= 50 // 50ms刻みで更新
+    
+    if (silenceCountdown.value <= 0) {
+      stopCountdown()
+    }
+  }, 50)
+}
+
+// カウントダウンタイマー停止
+function stopCountdown() {
+  isCountingDown.value = false
+  silenceCountdown.value = 0
+  
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+}
 
 
 // 手動録音関数
@@ -318,6 +380,9 @@ function stopAutoRecord() {
   // ビープ音停止
   stopPeriodicBeep()
   
+  // カウントダウン停止
+  stopCountdown()
+  
   // もし自動録音中だった場合は停止
   if (isRecording.value) {
     stopManualRecording()
@@ -352,6 +417,23 @@ function stopAutoRecording() {
   
   // ビープ音停止
   stopPeriodicBeep()
+  
+  // カウントダウン停止
+  stopCountdown()
+}
+
+// 無音検出時のカウントダウン開始（外部から呼ばれる）
+function startSilenceCountdown() {
+  if (autoRecordActive.value && autoRecordCurrentlyRecording.value) {
+    startCountdown()
+  }
+}
+
+// 音声検出時のカウントダウン停止（外部から呼ばれる）
+function stopSilenceCountdown() {
+  if (isCountingDown.value) {
+    stopCountdown()
+  }
 }
 
 // 無音時間変更時
@@ -385,12 +467,15 @@ function formatDuration(seconds: number): string {
 // コンポーネントのクリーンアップ
 onUnmounted(() => {
   cleanupBeep()
+  stopCountdown()
 })
 
 // 外部からアクセス可能にする
 defineExpose({
   startAutoRecording,
-  stopAutoRecording
+  stopAutoRecording,
+  startSilenceCountdown,
+  stopSilenceCountdown
 })
 </script>
 
@@ -449,5 +534,29 @@ defineExpose({
 
 .beep-sound-setting .el-checkbox {
   font-weight: bold;
+}
+
+.countdown-display {
+  margin-top: 15px;
+  padding: 15px;
+  background: #fef5e7;
+  border-radius: 4px;
+  border: 1px solid #fbd19c;
+  text-align: center;
+}
+
+.countdown-label {
+  font-size: 14px;
+  color: #e6a23c;
+  margin-bottom: 8px;
+  font-weight: bold;
+}
+
+.countdown-timer {
+  font-size: 24px;
+  font-weight: bold;
+  color: #f56c6c;
+  margin-bottom: 10px;
+  font-family: 'Courier New', monospace;
 }
 </style>
