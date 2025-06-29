@@ -83,6 +83,19 @@
                   短いほど敏感に停止、長いほど余裕を持って録音継続
                 </div>
               </div>
+              
+              <!-- ビープ音設定 -->
+              <div class="beep-sound-setting">
+                <el-checkbox 
+                  v-model="isBeepEnabled" 
+                  @change="onBeepEnabledChange"
+                >
+                  録音中にビープ音を再生
+                </el-checkbox>
+                <div class="setting-hint">
+                  録音中であることを知らせる控えめなビープ音（3秒間隔）
+                </div>
+              </div>
             </div>
           </div>
         </el-tab-pane>
@@ -92,9 +105,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAudioDevices } from '../composables/useAudioDevices'
+import { useBeepSound } from '../composables/useBeepSound'
 
 const isRecording = ref(false)
 const autoRecord = ref(false)
@@ -124,6 +138,15 @@ const recordingTime = ref(0)
 
 // オーディオデバイス管理
 const { selectedDeviceId } = useAudioDevices()
+
+// ビープ音管理
+const {
+  isBeepEnabled,
+  startPeriodicBeep,
+  stopPeriodicBeep,
+  setBeepEnabled,
+  cleanup: cleanupBeep
+} = useBeepSound()
 
 let mediaRecorder: MediaRecorder | null = null
 let websocket: WebSocket | null = null
@@ -292,6 +315,9 @@ function stopAutoRecord() {
   autoRecordCurrentlyRecording.value = false
   emit('auto-record-changed', false)
   
+  // ビープ音停止
+  stopPeriodicBeep()
+  
   // もし自動録音中だった場合は停止
   if (isRecording.value) {
     stopManualRecording()
@@ -306,6 +332,16 @@ async function startAutoRecording() {
   
   autoRecordCurrentlyRecording.value = true
   await startManualRecording()
+  
+  // 自動録音中にビープ音開始
+  if (isBeepEnabled.value) {
+    startPeriodicBeep({
+      frequency: 800,    // 控えめな周波数
+      duration: 150,     // 短い持続時間
+      volume: 0.08,      // 低い音量
+      interval: 3000     // 3秒間隔
+    })
+  }
 }
 
 function stopAutoRecording() {
@@ -313,11 +349,22 @@ function stopAutoRecording() {
   
   autoRecordCurrentlyRecording.value = false
   stopManualRecording()
+  
+  // ビープ音停止
+  stopPeriodicBeep()
 }
 
 // 無音時間変更時
 function onSilenceDurationChange(value: number) {
   emit('silence-duration-changed', value)
+}
+
+// ビープ音有効/無効変更時
+function onBeepEnabledChange(enabled: boolean) {
+  setBeepEnabled(enabled)
+  if (!enabled) {
+    stopPeriodicBeep()
+  }
 }
 
 // 時間フォーマット関数
@@ -334,6 +381,11 @@ function formatDuration(seconds: number): string {
     }
   }
 }
+
+// コンポーネントのクリーンアップ
+onUnmounted(() => {
+  cleanupBeep()
+})
 
 // 外部からアクセス可能にする
 defineExpose({
@@ -385,5 +437,17 @@ defineExpose({
   font-size: 12px;
   color: #909399;
   text-align: center;
+}
+
+.beep-sound-setting {
+  margin-top: 15px;
+  padding: 15px;
+  background: #f0f9ff;
+  border-radius: 4px;
+  border: 1px solid #bfdbfe;
+}
+
+.beep-sound-setting .el-checkbox {
+  font-weight: bold;
 }
 </style>
