@@ -92,6 +92,45 @@
           <span v-else>非常に敏感（ノイズも拾いやすい）</span>
         </div>
       </div>
+      
+      <!-- 高度な設定 -->
+      <div class="advanced-settings">
+        <h4>高度な設定</h4>
+        
+        <!-- ヒステリシス設定 -->
+        <div class="setting-item">
+          <label>ヒステリシス: {{ vadHysteresis }} dB</label>
+          <el-slider
+            v-model="vadHysteresis"
+            :min="1"
+            :max="10"
+            :step="0.5"
+            :marks="{ 1: '1dB', 3: '3dB', 5: '5dB', 10: '10dB' }"
+            @change="onVadHysteresisChange"
+          />
+          <div class="setting-hint">
+            録音停止閾値は開始閾値から-{{ vadHysteresis }}dB（{{ vadThreshold - vadHysteresis }}dB）
+          </div>
+        </div>
+        
+        <!-- 平滑化係数設定 -->
+        <div class="setting-item">
+          <label>平滑化レベル: {{ Math.round((1 - smoothingFactor) * 100) }}%</label>
+          <el-slider
+            v-model="smoothingFactor"
+            :min="0.1"
+            :max="0.9"
+            :step="0.1"
+            :marks="{ 0.1: '強', 0.5: '中', 0.9: '弱' }"
+            @change="onSmoothingFactorChange"
+          />
+          <div class="setting-hint">
+            <span v-if="smoothingFactor <= 0.3">強い平滑化（ノイズに強いが反応が遅い）</span>
+            <span v-else-if="smoothingFactor <= 0.7">標準的な平滑化</span>
+            <span v-else>弱い平滑化（反応が速いがノイズに敏感）</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -107,6 +146,8 @@ const isSpeaking = ref(false)
 const noiseLevel = ref(-50)
 const waveformCanvas = ref<HTMLCanvasElement>()
 const vadThreshold = ref(-35)  // VAD閾値
+const vadHysteresis = ref(3)    // VADヒステリシス
+const smoothingFactor = ref(0.7) // 平滑化係数
 
 // Props定義
 interface Props {
@@ -169,7 +210,14 @@ const volumeColor = computed(() => {
   return '#67c23a' // 緑（適正）
 })
 
-const { startMonitoring, stopMonitoring, restartMonitoring, setVadThreshold } = useAudioMonitor({
+const { 
+  startMonitoring, 
+  stopMonitoring, 
+  restartMonitoring, 
+  setVadThreshold,
+  setVadHysteresis,
+  setSmoothingFactor
+} = useAudioMonitor({
   onVolumeUpdate: (db: number, percentage: number) => {
     volumeDb.value = db
     volumePercentage.value = percentage
@@ -189,7 +237,9 @@ const { startMonitoring, stopMonitoring, restartMonitoring, setVadThreshold } = 
     noiseLevel.value = level
   },
   deviceId: selectedDeviceId.value,
-  vadThreshold: vadThreshold.value
+  vadThreshold: vadThreshold.value,
+  vadHysteresis: vadHysteresis.value,
+  smoothingFactor: smoothingFactor.value
 })
 
 // デバイス変更を監視
@@ -197,6 +247,24 @@ watch(selectedDeviceId, (newDeviceId) => {
   if (newDeviceId) {
     restartMonitoring()
   }
+})
+
+// VAD閾値変更を監視してリアルタイム反映
+watch(vadThreshold, (newThreshold) => {
+  setVadThreshold(newThreshold)
+  console.log('AudioMonitor: VAD閾値変更を検出:', newThreshold, 'dB') // デバッグ用ログ
+})
+
+// VADヒステリシス変更を監視
+watch(vadHysteresis, (newHysteresis) => {
+  setVadHysteresis(newHysteresis)
+  console.log('AudioMonitor: VADヒステリシス変更を検出:', newHysteresis, 'dB') // デバッグ用ログ
+})
+
+// 平滑化係数変更を監視
+watch(smoothingFactor, (newFactor) => {
+  setSmoothingFactor(newFactor)
+  console.log('AudioMonitor: 平滑化係数変更を検出:', newFactor) // デバッグ用ログ
 })
 
 onMounted(() => {
@@ -219,7 +287,20 @@ function refreshDevices() {
 
 // VAD閾値変更時
 function onVadThresholdChange(value: number) {
+  console.log('onVadThresholdChange呼び出し:', value, 'dB') // デバッグ用ログ
   setVadThreshold(value)
+}
+
+// VADヒステリシス変更時
+function onVadHysteresisChange(value: number) {
+  console.log('onVadHysteresisChange呼び出し:', value, 'dB') // デバッグ用ログ
+  setVadHysteresis(value)
+}
+
+// 平滑化係数変更時
+function onSmoothingFactorChange(value: number) {
+  console.log('onSmoothingFactorChange呼び出し:', value) // デバッグ用ログ
+  setSmoothingFactor(value)
 }
 
 // 波形描画
@@ -434,6 +515,46 @@ canvas {
 }
 
 .threshold-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
+}
+
+.advanced-settings {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.advanced-settings h4 {
+  margin: 0 0 15px 0;
+  color: #606266;
+  font-size: 16px;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #fff;
+  border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.setting-item:last-child {
+  margin-bottom: 0;
+}
+
+.setting-item label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.setting-hint {
   margin-top: 10px;
   font-size: 12px;
   color: #909399;

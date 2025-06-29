@@ -7,6 +7,8 @@ interface AudioMonitorOptions {
   onNoiseLevel: (level: number) => void
   deviceId?: string
   vadThreshold?: number  // VAD閾値（dB）
+  vadHysteresis?: number // VADヒステリシス（dB）
+  smoothingFactor?: number // 平滑化係数（0-1）
 }
 
 export function useAudioMonitor(options: AudioMonitorOptions) {
@@ -14,9 +16,13 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   let analyser: AnalyserNode | null = null
   let microphone: MediaStreamAudioSourceNode | null = null
   let animationId: number | null = null
+  let previousSpeakingState: boolean | null = null  // VAD状態変化検出用
+  let smoothedDb: number = -80  // 平滑化された音量値（初期値を低くする）
   
   const isMonitoring = ref(false)
   const vadThreshold = ref(options.vadThreshold ?? -35)  // デフォルト -35 dB
+  const vadHysteresis = ref(options.vadHysteresis ?? 3)  // デフォルト 3 dB
+  const smoothingFactor = ref(options.smoothingFactor ?? 0.7)  // デフォルト 0.7
   
   async function startMonitoring() {
     try {
@@ -60,10 +66,59 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
         const db = 20 * Math.log10(rms)
         const percentage = Math.min(100, Math.max(0, (db + 60) * 1.67))
         
-        options.onVolumeUpdate(Math.round(db), Math.round(percentage))
+        // 音量の平滑化（急激な変化を抑える）
+        // -Infinityの場合は現在の値で初期化
+        if (!isFinite(smoothedDb)) {
+          smoothedDb = db
+        } else {
+          smoothedDb = smoothedDb * (1 - smoothingFactor.value) + db * smoothingFactor.value
+        }
         
-        // シンプルなVAD（エネルギーベース）
-        const isSpeaking = db > vadThreshold.value
+        // UIには平滑化された値を表示（VAD判定と一致させる）
+        const smoothedPercentage = Math.min(100, Math.max(0, (smoothedDb + 60) * 1.67))
+        options.onVolumeUpdate(Math.round(smoothedDb), Math.round(smoothedPercentage))
+        
+        // ヒステリシス付きVAD（エネルギーベース） - 平滑化された値を使用
+        // 録音開始は設定値、録音停止は設定値-ヒステリシス
+        let isSpeaking: boolean
+        
+        if (previousSpeakingState === false) {
+          // 現在無音状態 → 録音開始は通常の閾値
+          isSpeaking = smoothedDb > vadThreshold.value
+        } else {
+          // 現在音声検出中 → 録音停止は閾値-ヒステリシス
+          isSpeaking = smoothedDb > (vadThreshold.value - vadHysteresis.value)
+        }
+        
+        // デバッグ：閾値を超えているのに状態が変わらない場合
+        if (smoothedDb > vadThreshold.value && previousSpeakingState === false) {
+          console.log(`⚡ 音声検出トリガー: 平滑化=${smoothedDb.toFixed(1)}dB > 閾値=${vadThreshold.value}dB`)
+        }
+        
+        // デバッグ用：判定の詳細
+        const debugInfo = {
+          rawDb: db.toFixed(1),
+          smoothedDb: smoothedDb.toFixed(1),
+          threshold: vadThreshold.value,
+          comparison: `${smoothedDb.toFixed(1)} > ${vadThreshold.value}`,
+          result: isSpeaking,
+          expected: smoothedDb > vadThreshold.value
+        }
+        
+        // VAD状態が変化した時のみログ出力
+        if (previousSpeakingState !== isSpeaking) {
+          const effectiveThreshold = previousSpeakingState ? (vadThreshold.value - vadHysteresis.value) : vadThreshold.value
+          console.log(`🔊 VAD状態変化: ${previousSpeakingState} → ${isSpeaking} (生音量=${db.toFixed(1)}dB, 平滑化=${smoothedDb.toFixed(1)}dB, 閾値=${effectiveThreshold}dB${previousSpeakingState ? ' [停止用]' : ' [開始用]'})`)
+          console.log('   判定詳細:', debugInfo)
+          
+          previousSpeakingState = isSpeaking
+        }
+        
+        // 定期的な状態確認（頻度調整）
+        if (Math.random() < 0.005) { // 200回に1回
+          console.log(`VAD状態確認: 生音量=${db.toFixed(1)}dB, 平滑化=${smoothedDb.toFixed(1)}dB, 閾値=${vadThreshold.value}dB, 音声検出=${isSpeaking}`)
+        }
+        
         options.onVadUpdate(isSpeaking)
         
         // 波形データ
@@ -111,14 +166,29 @@ export function useAudioMonitor(options: AudioMonitorOptions) {
   
   function setVadThreshold(threshold: number) {
     vadThreshold.value = threshold
+    console.log('VAD閾値を更新:', threshold, 'dB') // デバッグ用ログ
+  }
+  
+  function setVadHysteresis(hysteresis: number) {
+    vadHysteresis.value = hysteresis
+    console.log('VADヒステリシスを更新:', hysteresis, 'dB') // デバッグ用ログ
+  }
+  
+  function setSmoothingFactor(factor: number) {
+    smoothingFactor.value = factor
+    console.log('平滑化係数を更新:', factor) // デバッグ用ログ
   }
 
   return {
     isMonitoring,
     vadThreshold,
+    vadHysteresis,
+    smoothingFactor,
     startMonitoring,
     stopMonitoring,
     restartMonitoring,
-    setVadThreshold
+    setVadThreshold,
+    setVadHysteresis,
+    setSmoothingFactor
   }
 }

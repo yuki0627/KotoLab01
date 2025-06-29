@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import AudioMonitor from './components/AudioMonitor.vue'
 import AudioRecorder from './components/AudioRecorder.vue'
 import RecordingHistory from './components/RecordingHistory.vue'
@@ -31,6 +31,11 @@ const audioRecorderRef = ref()
 const recordingHistoryRef = ref()
 let silenceTimer: ReturnType<typeof setTimeout> | null = null
 
+// 録音状態の変化を監視
+watch(isRecording, (newValue, oldValue) => {
+  console.log(`📍 録音状態変化: ${oldValue} → ${newValue}`)
+})
+
 // シンプルなVAD状態変更処理
 function handleVadChange(speaking: boolean) {
   isSpeaking.value = speaking
@@ -40,6 +45,7 @@ function handleVadChange(speaking: boolean) {
   
   if (speaking && !isRecording.value) {
     // 閾値を超えた → 録音開始
+    console.log('🎤 録音開始: 音声検出（speaking=true, recording=false）')
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
@@ -47,6 +53,7 @@ function handleVadChange(speaking: boolean) {
     audioRecorderRef.value?.startAutoRecording()
   } else if (!speaking && isRecording.value) {
     // 閾値を下回った → カウントダウン開始
+    console.log('⏱️ カウントダウン開始: 無音検出（speaking=false, recording=true）')
     if (silenceTimer) {
       clearTimeout(silenceTimer)
     }
@@ -56,12 +63,14 @@ function handleVadChange(speaking: boolean) {
     
     silenceTimer = setTimeout(() => {
       if (!isSpeaking.value && isRecording.value && autoRecordEnabled.value) {
+        console.log('🛑 録音停止: 無音時間経過')
         audioRecorderRef.value?.stopAutoRecording()
       }
       silenceTimer = null
     }, silenceDuration.value * 1000)
   } else if (speaking && isRecording.value) {
     // 録音中に再び音声検出 → 停止タイマーとカウントダウンをキャンセル
+    console.log('🔄 カウントダウンキャンセル: 音声再検出（speaking=true, recording=true）')
     if (silenceTimer) {
       clearTimeout(silenceTimer)
       silenceTimer = null
