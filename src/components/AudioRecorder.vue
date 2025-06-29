@@ -92,8 +92,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useAudioDevices } from '../composables/useAudioDevices'
 
 const isRecording = ref(false)
